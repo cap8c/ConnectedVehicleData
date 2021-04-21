@@ -1,0 +1,38 @@
+#references data from SQL data access code
+%python
+
+vis_heatmap_temperature = table("vis_int_tracker").toPandas().sample(n=600000, random_state=1, replace=True).sort_values(['local_hour'])
+vis_heatmap_temperature['local_hour'] =  pd.to_datetime(vis_heatmap_temperature['local_hour'])
+vis_heatmap_temperature = pd.pivot_table(vis_heatmap_temperature, index=['local_hour'], columns='journey_id',values=['longitude', 'latitude','size_p'], aggfunc=np.mean)
+
+vis_heatmap_temperature = vis_heatmap_temperature.interpolate(method='time', limit_direction='forward', axis=0, limit=8)
+
+vis_heatmap_temperature = vis_heatmap_temperature.stack().reset_index()
+vis_heatmap_temperature.columns = ['local_hour','journey_id', 'latitude','longitude','size_p']
+vis_heatmap_temperature['local_hour'] = vis_heatmap_temperature['local_hour'].astype(str)
+#vis_heatmap_temperature = pd.DataFrame(vis_heatmap_temperature)
+vis_heatmap_temperature=vis_heatmap_temperature.sort_values(['journey_id'])
+vis_heatmap_temperature['journey_id'] = pd.factorize(vis_heatmap_temperature['journey_id'])[0]
+vis_heatmap_temperature=vis_heatmap_temperature.sort_values(['local_hour','journey_id'])
+
+fig_temp = px.scatter_mapbox(vis_heatmap_temperature
+                     , lat="latitude" 
+                     , lon="longitude"
+                     , zoom=12
+                     , color="journey_id"
+                             ,range_color=(0,600)
+                             , color_continuous_scale = "viridis"
+                     , size="size_p"
+                     , animation_frame='local_hour'
+                     , animation_group='journey_id'
+                             , width = 1400
+                             , height = 800
+                     )
+fig_temp.update_layout(mapbox_style="carto-positron"
+                 )
+
+fig_temp.layout.updatemenus[0].buttons[0].args[1]['frame']['duration'] = 100
+fig_temp.layout.updatemenus[0].buttons[0].args[1]['transition']['duration'] = 10
+
+fig_temp.show()
+
