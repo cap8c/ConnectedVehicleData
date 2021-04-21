@@ -1,0 +1,103 @@
+O-D Analysis
+
+%sql 
+CREATE
+  OR REPLACE TEMPORARY VIEW vis_OD_ID AS
+SELECT
+  distinct(journey_id)
+ FROM
+  cv_data.driving_events
+WHERE
+  latitude BETWEEN 36.906426
+  AND  36.930176
+  AND longitude BETWEEN -76.331386
+  AND-76.320433
+  AND local_captured_date BETWEEN '2020-11-01'
+  AND '2020-12-30'
+  /*AND captured_time_local BETWEEN '2020-12-01T09:00:00.000+0000'
+  AND '2020-12-16T11:00:00.000+0000'*/
+GROUP BY
+  1
+ORDER BY
+  1
+  
+  
+  %sql 
+  
+CREATE
+  OR REPLACE TEMPORARY VIEW vis_OD_tracker AS
+SELECT
+    DATE_FORMAT(
+    CONCAT(
+      /*local_captured_date,
+      " ",*/
+      HOUR(captured_time_local)
+      , ":",
+      MINUTE(captured_time_local)
+      ,":",
+      round(SECOND(captured_time_local),-1)
+    )
+    ,     "HH:mm:s"
+    /*,"yyyy-MM-dd HH:mm:s"*/
+  )
+  AS local_hour,
+  journey_id,
+  latitude,
+  longitude,
+  latitude/10 as size_p
+ FROM
+  cv_data.driving_events
+WHERE
+  journey_id   
+  IN 
+   (SELECT journey_id FROM vis_OD_ID)
+  /*state_code = "DC"*/
+  /*AND captured_time_local BETWEEN '2020-12-01T09:00:00.000+0000'
+  AND '2020-12-16T11:00:00.000+0000'*/
+GROUP BY
+  1,
+  2,
+  3,
+  4
+ORDER BY
+  1,
+  2
+
+
+%python
+
+vis_heatmap_temperature = table("vis_OD_tracker").toPandas().sample(n=600000, random_state=1, replace=True).sort_values(['local_hour'])
+vis_heatmap_temperature['local_hour'] =  pd.to_datetime(vis_heatmap_temperature['local_hour'])
+vis_heatmap_temperature = pd.pivot_table(vis_heatmap_temperature, index=['local_hour'], columns='journey_id',values=['longitude', 'latitude','size_p'], aggfunc=np.mean)
+
+vis_heatmap_temperature = vis_heatmap_temperature.interpolate(method='time', limit_direction='forward', axis=0, limit=8)
+
+vis_heatmap_temperature = vis_heatmap_temperature.stack().reset_index()
+vis_heatmap_temperature.columns = ['local_hour','journey_id', 'latitude','longitude','size_p']
+vis_heatmap_temperature['local_hour'] = vis_heatmap_temperature['local_hour'].astype(str)
+#vis_heatmap_temperature = pd.DataFrame(vis_heatmap_temperature)
+vis_heatmap_temperature=vis_heatmap_temperature.sort_values(['journey_id'])
+vis_heatmap_temperature['journey_id'] = pd.factorize(vis_heatmap_temperature['journey_id'])[0]
+vis_heatmap_temperature=vis_heatmap_temperature.sort_values(['local_hour','journey_id'])
+
+fig_temp = px.scatter_mapbox(vis_heatmap_temperature
+                     , lat="latitude" 
+                     , lon="longitude"
+                     , zoom=12
+                     , color="journey_id"
+                             ,range_color=(0,20)
+                             , color_continuous_scale = "viridis"
+                     , size="size_p"
+                     , animation_frame='local_hour'
+                     , animation_group='journey_id'
+                             , width = 1400
+                             , height = 800
+                     )
+fig_temp.update_layout(mapbox_style="carto-positron"
+                 )
+
+fig_temp.layout.updatemenus[0].buttons[0].args[1]['frame']['duration'] = 100
+fig_temp.layout.updatemenus[0].buttons[0].args[1]['transition']['duration'] = 10
+
+fig_temp.show()
+
