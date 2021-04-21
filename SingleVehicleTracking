@@ -1,0 +1,30 @@
+%python
+vis_heatmap_temperature = table("vis_tracker").toPandas().sample(n=100000, random_state=1, replace=True).sort_values(['local_hour'])
+
+fig_temp = px.scatter_mapbox(vis_heatmap_temperature
+                     , lat="latitude"
+                     , lon="longitude"
+                     , zoom=10
+                     , color='event_type'
+                     , size = "size_p"
+                     #, color_continuous_scale = "viridis"
+                             #, size_max = 10
+                     #, radius = 10
+                     #, range_color=(0,50)
+                     , animation_frame="local_hour"
+                    
+                             , width = 800
+                             , height = 800
+                     )
+fig_temp.update_layout(mapbox_style="carto-positron"
+                 , legend=dict(
+                    y=1,
+                    x=0
+                    )
+                 )
+
+
+fig_temp.layout.updatemenus[0].buttons[0].args[1]['frame']['duration'] = 100
+fig_temp.layout.updatemenus[0].buttons[0].args[1]['transition']['duration'] = 10
+
+fig_temp.show()
