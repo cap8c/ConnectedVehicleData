@@ -1,0 +1,63 @@
+install.packages("rlist")
+
+///
+
+library("rlang")
+library("ggplot2")
+library("sparklyr")
+library("SparkR")
+library("dplyr") #nb this needs to be last
+
+data = SparkR::sql
+
+///
+
+
+%sql
+CREATE OR REPLACE TEMP VIEW journeys_by_hour
+AS
+SELECT
+  HOUR(cv.captured_time_local) AS local_captured_hour,
+  COUNT(cv.journey_id) AS number_of_events,
+  COUNT(DISTINCT cv.journey_id) AS number_of_journeys
+FROM
+  cv_data.driving_events cv
+WHERE date(captured_time_local)='2020-11-05'
+GROUP BY 1;
+SELECT * FROM journeys_by_hour limit 10;
+
+////
+
+speed_df <- SparkR::sql("SELECT HOUR(captured_time_local) AS local_captured_hour, COUNT(*) AS cnt_datapoints FROM cv_data.vehicle_movements   WHERE date(captured_time_local)='2020-11-05' GROUP BY 1 ORDER BY 1") %>% 
+  SparkR::as.data.frame() %>%
+  as_tibble()
+  
+  ///
+  
+  which_door <- SparkR::sql("
+SELECT
+  door_identifier,
+  HOUR(captured_time_local) AS local_hour,
+  COUNT(journey_id) AS number_of_events,
+  COUNT(DISTINCT journey_id) AS number_of_journeys
+FROM
+  cv_data.driving_events
+WHERE
+  event_type = 'DOOR_STATE_CHANGE'
+GROUP BY 1, 2
+ORDER BY 2
+") %>% 
+  SparkR::as.data.frame() %>%
+  as_tibble() 
+  
+  
+  //
+  
+  p <- ggplot(which_door, aes(x=local_hour, y=number_of_events , group=door_identifier, color=door_identifier))+
+  geom_line()+
+  geom_point(size=1)+
+  ggtitle("Different Door Events by Hour") +
+  xlab("Hour of day (local time)") +
+  ylab("Number of Door Events")  + labs(color='Door Identifier')
+
+p
