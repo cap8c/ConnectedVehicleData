@@ -1,0 +1,26 @@
+import pyarrow.parquet as pq
+import pandas as pd
+import os
+import plotly.express as px
+
+
+
+# Set the AWS access key ID and secret access key as environment variables
+os.environ['AWS_ACCESS_KEY_ID'] = 'AWS_ACCESS_KEY_ID'
+os.environ['AWS_SECRET_ACCESS_KEY'] = 'AWS_SECRET_ACCESS_KEY'
+
+# Specify the S3 bucket name and file path
+bucket_name = 'vdot-wejo-2023'
+file_path = '(copy file path from AWS)'
+
+# Read the Parquet file from S3 into a pyarrow.Table
+table = pq.read_table(f's3://{bucket_name}/{file_path}')
+
+# Convert the pyarrow.Table to a pandas DataFrame
+df = table.to_pandas()
+
+df['latitude'] = df['location'].apply(lambda loc: loc['latitude'])
+df['longitude'] = df['location'].apply(lambda loc: loc['longitude'])
+
+# Convert the capturedTimestamp column to datetime
+df['capturedTimestamp'] = pd.to_datetime(df['capturedTimestamp'], format='%Y-%m-%dT%H:%M:%S.%f%z')
