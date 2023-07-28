@@ -1,0 +1,61 @@
+import pandas as pd
+import plotly.express as px
+import plotly.offline as pyo
+
+from CV_Connect_Filter import df
+
+# # Assuming you have the filtered DataFrame 'filtered_df' containing the data
+
+# Define the range of longitude and latitude
+min_longitude = -78.90
+max_longitude = -78.88
+min_latitude = 37.724
+max_latitude = 37.745
+
+# Filter the DataFrame based on longitude and latitude range
+filtered_df = df[df['longitude'].between(min_longitude, max_longitude) & df['latitude'].between(min_latitude, max_latitude)]
+
+# Get a random sample of n unique journeyIds
+journey_ids = filtered_df['journeyId'].unique()
+random_journey_ids = pd.Series(journey_ids).sample(n=1).tolist()
+
+# Filter the DataFrame for the random journeyIds
+filtered_df = filtered_df[filtered_df['journeyId'].isin(random_journey_ids)]
+
+filtered_df['heading'] = pd.to_numeric(filtered_df['heading'], errors='coerce')
+
+# Set the animation frame to one-minute intervals
+filtered_df['capturedTimestamp'] = pd.to_datetime(filtered_df['capturedTimestamp'], errors='coerce')
+filtered_df['animation_frame'] = filtered_df['capturedTimestamp'].dt.floor('10S')
+
+print(filtered_df.head())
+
+# Create the map figure using Plotly Express
+fig = px.scatter_mapbox(filtered_df
+                        , lat='latitude'
+                        , lon='longitude'
+                        , zoom=12
+                        , hover_name='speed'
+                        , color="speed"
+                        , range_color=(0, 100)
+                        , color_continuous_scale="viridis"
+                        , animation_frame='animation_frame'
+                        , animation_group='journeyId'
+                        )
+
+fig.update_traces(marker={"size": 10})
+# Customize the map layout
+fig.update_layout(
+    title='VDOT - Connected Vehicle Data',
+    mapbox_style='carto-positron',
+)
+
+
+
+fig.layout.updatemenus[0].buttons[0].args[1]['frame']['duration'] = 150 #one minute
+fig.layout.updatemenus[0].buttons[0].args[1]['transition']['duration'] = 10
+
+# Save the figure as an HTML file
+pyo.plot(fig, filename='my_chart.html', auto_open=False)
+
+fig.show()
