@@ -1,0 +1,64 @@
+import pandas as pd
+import plotly.express as px
+import plotly.offline as pyo
+import geopandas as gpd
+from shapely.geometry import Point
+import matplotlib.pyplot as plt
+
+file_path = '[file path of CV data with events]'
+
+# Step 1: Load the shapefile and DataFrame
+shapefile_path = '[file path of .shp file of road line]'
+gdf_lines = gpd.read_file(shapefile_path)
+
+# Read the .csv file and create a DataFrame
+df = pd.read_csv(file_path)
+
+# Method 2: Using len() function
+num_rows = len(df)
+print("Number of rows using len() function:", num_rows)
+
+df['captureddatetime'] = pd.to_datetime(df['captureddatetime'], format='%Y-%m-%dT%H:%M:%S.%f%z')
+df['captureddatetime'] = pd.to_datetime(df['captureddatetime'], errors='coerce')
+
+df['time'] = df['captureddatetime'] - df['captureddatetime'].dt.normalize()
+df['animation_frame'] = df['time'].dt.floor('10S')
+
+df['speed'] = df['metrics'].str.extract(r'speed=(\d+\.\d+)').astype(float)
+df['heading'] = df['metrics'].str.extract(r'heading=(\d+\.\d+)').astype(float)
+
+df['latitude'] = df['location'].str.extract(r'latitude=(-?\d+\.\d+)').astype(float)
+df['longitude'] = df['location'].str.extract(r'longitude=(-?\d+\.\d+)').astype(float)
+
+# Define the range and interval for creating bins of location
+bin_range = (-78.9007, -78.8765) #[long/lat range]
+bin_interval = 0.00048  #[long/lat interval]
+
+# Create a new column 'bin_value' with the bin labels based on the 'continuous_value' column
+df['bin_value'] = pd.cut(df['longitude'], bins=round((bin_range[1] - bin_range[0]) / bin_interval))
+
+# Step 2: Convert DataFrame to GeoDataFrame
+gdf_data = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.longitude, df.latitude))
+
+# Step 3: Create buffers around the lines
+buffer_distance = .0001  # Adjust this value according to your needs, in long/lat decimals
+gdf_buffers = gdf_lines.buffer(buffer_distance)
+
+# Step 4: Check if points are within the buffers
+gdf_data['within_buffer'] = gdf_data.within(gdf_buffers.unary_union)
+
+# Step 5: Filter the GeoDataFrame
+filtered_df = gdf_data[gdf_data['within_buffer']]
+
+# Step 6: Optionally, drop the 'within_buffer' column if you don't need it in the final result
+filtered_df = filtered_df.drop(columns=['within_buffer'])
+
+
+filtered_df['accelerationtype'] = filtered_df['event'].str.extract(r'eventmetadata.*accelerationtype=([^,}]+)')
+filtered_df['ABS'] = filtered_df['event'].str.extract(r'eventmetadata.*autonomousemergencybrakingtype=([^,}]+)')
+filtered_df['Seat_Belt'] = filtered_df['event'].str.extract(r'eventmetadata.*seatbeltstatus=([^,}]+)')
+filtered_df['HONK'] = filtered_df['event'].str.extract(r'eventmetadata.*hornstatuschangetype=([^,}]+)')
+
+#filtered_df = filtered_df[(filtered_df['hr'] >= 0) & (filtered_df['hr'] <= 23)]
+
+filtered_df.to_csv('[save file location]', index=False)
